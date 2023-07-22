@@ -1,0 +1,8 @@
+[Unit]
+Description=SmartMeter Readout Tool
+
+[Service]
+WorkingDirectory=/home/pi/smartmeter
+ExecStart=python3 SmartMeterReadout.py
+Restart=on-failure
+RestartSec=30
