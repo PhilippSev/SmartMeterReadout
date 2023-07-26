@@ -1,11 +1,21 @@
+#######################################
+#
+# SmartMeterReadout.py
+#
+# This script reads out the smart meter and stores it to json files that can be used by the webserver.
+#
+# Inspired by and based on:
+# https://github.com/micronano0/RaspberryPi-Kaifa-SmartMeter-Reader/blob/main/kaifa_kundenschnittstelle_auslesen.py
+# https://www.michaelreitbauer.at/kaifa-ma309-auslesen-smart-meter-evn/?utm_source=pocket_saves
+#
+#######################################
+
+from binascii import unhexlify
+import binascii
 import sys
 import serial
 import time
 from Crypto.Cipher import AES
-from gurux_dlms.GXDLMSTranslator import GXDLMSTranslator
-from gurux_dlms.GXDLMSTranslatorMessage import GXDLMSTranslatorMessage
-from gurux_dlms.GXByteBuffer import GXByteBuffer
-from gurux_dlms.TranslatorOutputType import TranslatorOutputType
 
 #ser = serial.Serial("/dev/ttyS0", baudrate=2400, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS, timeout=10)
 
@@ -28,24 +38,35 @@ from gurux_dlms.TranslatorOutputType import TranslatorOutputType
 #vkw
 apdu_bytes = bytes.fromhex("68fafa6853ff000167db084b464d102002aca5820155210026fbc406fc4dc4cee9ea2dc9da0e57f08f92b78591ef079803d773a929502e669afd70197c7a8c2b4cc994870298afd3714b31d64862f3fd4f99a9ccc5c16141cd3fb93f40ceeeef366a1b14bc461fedafb96cf1fc0b6d82f226caffc4a5b885cf71c34e1e468883e9912c0c9e43636513d2b55ad625a7c27f2aa1000c07fe3b75c66e2baa1bead19ef5dcfa54e194badbf6ace7446fdd0bc355fbe2fe78ada2dd8aa0578ee66c598418a4e86c4da0b104c17e7c206aff7382d63ab5a8dafe212dae5d695b88f42dab9fd7ffdad5713b90be8dfa857afff5ec74fba75621d8e875563f44432683166872726853ff1101675395df7a457c5c0bb934c9204de453e8c773e896d6391809e17f54886699d250fd5e736719eb1e08fd43dfa242625201f528e5a0fc516aeb00b1163a0aeccef3c8f250ab27fad11bd50cb2322eb23e87b4b00e57d2e43d2d8945c4b2119a219d353e6f4099fc54cf289d9629f4e216")
 key = "48704F444F326D5050553033784C3333"
+key = binascii.unhexlify(key)
 
-tr = GXDLMSTranslator(TranslatorOutputType.SIMPLE_XML)
-tr.blockCipherKey = GXByteBuffer(key)
-tr.comments = True
+data = apdu_bytes
 
-while True:
-    daten = apdu_bytes.hex()
-    print(daten)
+msglen1 = int(hex(data[1]),16) # 1. FA --- 250 Byte
+            #print ("msg1: ", msglen1)
 
-    msg = GXDLMSTranslatorMessage()
-    msg.message = GXByteBuffer(daten)
-    xml = ""
-    pdu = GXByteBuffer()
-    tr.completePdu = True
-    tr.comments = True
-    while tr.findNextFrame(msg, pdu):
-        pdu.clear()
-        xml += tr.messageToXml(msg)
+header1 = 27
+header2 = 9
 
-    print(xml)
-    break
+splitinfo = data[6] # wenn hier 00, dann gibts noch eine Nachricht
+
+systitle = data[11:19] # hier steht der SysTitle --- 8 Bytes
+#print ("systitle:", systitle.hex() )
+
+ic = data[23:27] # hier steht der SysTitle --- 4 Bytes
+iv = systitle + ic # iv ist 12 Bytes
+#print ("iv= ", iv.hex() , "Länge: ", len(iv))
+
+#print ("\nmsg1:")
+msg1 = data[header1:(6+msglen1-2)]
+
+msglen2 = int(hex(data[msglen1+7]),16) # 1. FA --- 38 Byte
+
+msg2 = data[msglen1+6+header2:(msglen1+5+5+msglen2)]
+
+cyphertext = msg1 + msg2
+
+cyphertext_bytes=binascii.unhexlify(cyphertext.hex())
+cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+decrypted = cipher.decrypt(cyphertext_bytes)
+print(decrypted.hex())
