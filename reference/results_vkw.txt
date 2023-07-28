@@ -1,0 +1,151 @@
+BlockCipher key: 48 70 4F 44 4F 32 6D 50 50 55 30 33 78 4C 33 33
+Authentication Key:D0 D1 D2 D3 D4 D5 D6 D7 D8 D9 DA DB DC DD DE DF
+1: 68 72 72 68 53 FF 11 01 67 53 95 DF 7A 45 7C 5C 0B B9 34 C9 20 4D E4 53 E8 C7 73 E8 96 D6 39 18 09 E1 7F 54 88 66 99 D2 50 FD 5E 73 67 19 EB 1E 08 FD 43 DF A2 42 62 52 01 F5 28 E5 A0 FC 51 6A EB 00 B1 16 3A 0A EC CE F3 C8 F2 50 AB 27 FA D1 1B D5 0C B2 32 2E B2 3E 87 B4 B0 0E 57 D2 E4 3D 2D 89 45 C4 B2 11 9A 21 9D 35 3E 6F 40 99 FC 54 CF 28 9D 96 29 F4 E2 16
+<!-- DLMS system title:
+Manufacturer Code: KFM
+Serial number: 175269
+ -->
+<!-- Invocation Counter: 2554820 -->
+<!-- Decrypt data: 0F 00 26 9A B7 0C 07 E7 07 1A 03 14 05 14 00 FF 88 80 02 10 09 06 00 00 01 00 00 FF 09 0C 07 E7 07 1A 03 14 05 14 00 FF 88 80 02 02 09 06 00 00 60 01 00 FF 09 0E 31 4B 46 4D 30 32 30 30 31 37 35 32 36 39 02 02 09 06 00 00 2A 00 00 FF 09 10 4B 46 4D 31 32 30 30 32 30 30 31 37 35 32 36 39 02 03 09 06 01 00 20 07 00 FF 12 09 1A 02 02 0F FF 16 23 02 03 09 06 01 00 34 07 00 FF 12 09 18 02 02 0F FF 16 23 02 03 09 06 01 00 48 07 00 FF 12 09 17 02 02 0F FF 16 23 02 03 09 06 01 00 1F 07 00 FF 12 00 1F 02 02 0F FE 16 21 02 03 09 06 01 00 33 07 00 FF 12 00 34 02 02 0F FE 16 21 02 03 09 06 01 00 47 07 00 FF 12 00 15 02 02 0F FE 16 21 02 03 09 06 01 00 01 07 00 FF 06 00 00 00 35 02 02 0F 00 16 1B 02 03 09 06 01 00 02 07 00 FF 06 00 00 00 00 02 02 0F 00 16 1B 02 03 09 06 01 00 01 08 00 FF 06 00 39 21 52 02 02 0F 00 16 1E 02 03 09 06 01 00 02 08 00 FF 06 00 3B F7 84 02 02 0F 00 16 1E 02 03 09 06 01 00 03 08 00 FF 06 00 00 34 85 02 02 0F 00 16 20 02 03 09 06 01 00 04 08 00 FF 06 00 14 0A 50 02 02 0F 00 16 20
+  <DataNotification>
+    # Invoke ID: 2529975
+    <LongInvokeIdAndPriority Value="00269AB7" />
+    # 26.07.2023 20:05:20
+    <DateTime Value="07E7071A0314051400FF8880" />
+    <NotificationBody>
+      <DataValue>
+        <Structure Qty="10" >
+          # 0.0.1.0.0.255
+          <OctetString Value="0000010000FF" />
+          # 26.07.2023 20:05:20+02:00
+          <OctetString Value="07E7071A0314051400FF8880" />
+          <Structure Qty="02" >
+            # 0.0.96.1.0.255
+            <OctetString Value="0000600100FF" />
+            # 1KFM0200175269
+            <OctetString Value="314B464D30323030313735323639" />
+          </Structure>
+          <Structure Qty="02" >
+            # 0.0.42.0.0.255
+            <OctetString Value="00002A0000FF" />
+            # KFM1200200175269
+            <OctetString Value="4B464D31323030323030313735323639" />
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.32.7.0.255
+            <OctetString Value="0100200700FF" />
+            <UInt16 Value="091A" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFF" />
+              <Enum Value="23" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.52.7.0.255
+            <OctetString Value="0100340700FF" />
+            <UInt16 Value="0918" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFF" />
+              <Enum Value="23" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.72.7.0.255
+            <OctetString Value="0100480700FF" />
+            <UInt16 Value="0917" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFF" />
+              <Enum Value="23" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.31.7.0.255
+            <OctetString Value="01001F0700FF" />
+            <UInt16 Value="001F" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFE" />
+              <Enum Value="21" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.51.7.0.255
+            <OctetString Value="0100330700FF" />
+            <UInt16 Value="0034" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFE" />
+              <Enum Value="21" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.71.7.0.255
+            <OctetString Value="0100470700FF" />
+            <UInt16 Value="0015" />
+            <Structure Qty="02" >
+              <Int8 Value="FFFFFFFFFFFFFFFE" />
+              <Enum Value="21" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.1.7.0.255
+            <OctetString Value="0100010700FF" />
+            <UInt32 Value="00000035" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="1B" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.2.7.0.255
+            <OctetString Value="0100020700FF" />
+            <UInt32 Value="00000000" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="1B" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.1.8.0.255
+            <OctetString Value="0100010800FF" />
+            <UInt32 Value="00392152" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="1E" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.2.8.0.255
+            <OctetString Value="0100020800FF" />
+            <UInt32 Value="003BF784" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="1E" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.3.8.0.255
+            <OctetString Value="0100030800FF" />
+            <UInt32 Value="00003485" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="20" />
+            </Structure>
+          </Structure>
+          <Structure Qty="03" >
+            # 1.0.4.8.0.255
+            <OctetString Value="0100040800FF" />
+            <UInt32 Value="00140A50" />
+            <Structure Qty="02" >
+              <Int8 Value="00" />
+              <Enum Value="20" />
+            </Structure>
+          </Structure>
+        </Structure>
+      </DataValue>
+    </NotificationBody>
+  </DataNotification>
+-->
+<GeneralGloCiphering>
+  <SystemTitle Value="4B464D102002ACA5" />
+  <CipheredService Value="210026FBC406FC4DC4CEE9EA2DC9DA0E57F08F92B78591EF079803D773A929502E669AFD70197C7A8C2B4CC994870298AFD3714B31D64862F3FD4F99A9CCC5C16141CD3FB93F40CEEEEF366A1B14BC461FEDAFB96CF1FC0B6D82F226CAFFC4A5B885CF71C34E1E468883E9912C0C9E43636513D2B55AD625A7C27F2AA1000C07FE3B75C66E2BAA1BEAD19EF5DCFA54E194BADBF6ACE7446FDD0BC355FBE2FE78ADA2DD8AA0578EE66C598418A4E86C4DA0B104C17E7C206AFF7382D63AB5A8DAFE212DAE5D695B88F42DAB9FD7FFDAD5713B90BE8DFA857AFFF5EC74FBA75621D8E875563F4443265395DF7A457C5C0BB934C9204DE453E8C773E896D6391809E17F54886699D250FD5E736719EB1E08FD43DFA242625201F528E5A0FC516AEB00B1163A0AECCEF3C8F250AB27FAD11BD50CB2322EB23E87B4B00E57D2E43D2D8945C4B2119A219D353E6F4099FC54CF289D9629F4" />
+</GeneralGloCiphering>
+

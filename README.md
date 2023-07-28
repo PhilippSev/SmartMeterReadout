@@ -1,6 +1,6 @@
 # SmartMeter Readout
 
-Smart Meter Readout is a small python script that periodically reads the values from the KAIFA SmartMeter using the MBUS customer interface.
+Smart Meter Readout is a small python script that periodically reads the values from the KAIFA SmartMeter using the MBUS customer interface. The read values are then saved as json files that can be used by e.g. a Webserver.
 
 ## Setup
 
@@ -16,4 +16,7 @@ pip install -r requirements.txt
 
 ### Setup as Systemd Service
 
-The Setup as systemd service is done by executing the ```createSercive.sh``` script.
+The Setup as systemd service is done by executing the createService script.
+```
+createSercive.sh
+```
