@@ -14,13 +14,24 @@ import serial
 import time
 from Crypto.Cipher import AES
 from enum import Enum
-import datetime 
+from datetime import datetime, timedelta
+import json
+
+#######################################
+# Configuration
+
+history_hours = 24
+history_file = "history.json"
+current_file = "current.json"
+
+#######################################
+# Enums and constants
 
 units = {
     # byte  : unit
     0x1b : "W",
     0x1e : "Wh",
-    0x20 : "var",
+    0x20 : "varh",
     0x21 : "A",
     0x23 : "V",
 }
@@ -40,8 +51,8 @@ valueTuples = [
     (b'\x01\x00\x02\x08\x00\xFF', Type.UInt32,      "Wirkenergie A-"), # Lieferung
     (b'\x01\x00\x01\x07\x00\xFF', Type.UInt32,      "Wirkleistung P+"), # Bezug
     (b'\x01\x00\x02\x07\x00\xFF', Type.UInt32,      "Wirkleistung P-"), # Lieferung
-    (b'\x01\x00\x03\x08\x00\xFF', Type.UInt32,      "Blindleistung Q+"), # Bezug
-    (b'\x01\x00\x04\x08\x00\xFF', Type.UInt32,      "Blindleistung Q-"), # Lieferung
+    (b'\x01\x00\x03\x08\x00\xFF', Type.UInt32,      "Blindenergie Q+"), # Bezug
+    (b'\x01\x00\x04\x08\x00\xFF', Type.UInt32,      "Blindenergie Q-"), # Lieferung
     (b'\x01\x00\x20\x07\x00\xFF', Type.UInt16,      "Spannung L1"),
     (b'\x01\x00\x34\x07\x00\xFF', Type.UInt16,      "Spannung L2"),
     (b'\x01\x00\x48\x07\x00\xFF', Type.UInt16,      "Spannung L3"),
@@ -118,6 +129,7 @@ def getValueConverted(type, bytes, length):
         value_scaling = byte_to_signed_integer(value_scaling_raw)
         # apply scaling
         value_converted = float(value_int) * pow(10.0, value_scaling)
+        value_converted = round(value_converted, 2)
         # get unit if known
         value_unit_enum = bytes[value_end + 5]
         if value_unit_enum in units:
@@ -135,7 +147,7 @@ def getValueConverted(type, bytes, length):
         hour = int.from_bytes(value_bytes[5:6])
         minute = int.from_bytes(value_bytes[6:7])
         second = int.from_bytes(value_bytes[7:8])
-        value_converted = datetime.datetime(jear,month,day,hour,minute,second)
+        value_converted = datetime(jear,month,day,hour,minute,second)
     else:
         raise Exception("Unknown type")
     
@@ -146,6 +158,8 @@ def byte_to_signed_integer(byte):
         # 2's complement
         return -((~byte & 0xFF) + 1) 
     return byte
+
+json_current = {}
 
 # read values from plaintext
 for value in valueTuples:
@@ -159,7 +173,70 @@ for value in valueTuples:
 
     # convert obis value to usable value
     value_converted = getValueConverted(value[1], plaintext_bytes, length)
-
-
     print(value[2], value_converted)
+
+    # store value as json
+    json_inner = {}
+    json_inner["value"] = value_converted[0]
+    if value_converted[1] != None:
+        json_inner["unit"] = value_converted[1]
+    json_current[value[2]] = json_inner
+
+# Serializing json
+json_object = json.dumps(json_current, indent=4, default=str)
+
+# Writing current values to file
+with open(current_file, "w") as outfile:
+    outfile.write(json_object)
+
+# update history
+try:
+    with open(history_file, "r") as file:
+        json_history = json.load(file)
+
+    # remove old entries from history json
+    current_time = datetime.now()
+    threshold_time = current_time - timedelta(hours=history_hours)
+    filtered_data = [pair for pair in json_history if datetime.fromisoformat(pair['Datum']) >= threshold_time]
+except:
+    filtered_data = []
+
+# get newest value and read Wirkenergie A+ and Wirkenergie A-
+if len(filtered_data) > 0:
+    last_entry = filtered_data[-1]
+    wirkenergie_bezug_old = last_entry["Wirkenergie A+"]["value"]
+    wirkenergie_lieferung_old = last_entry["Wirkenergie A-"]["value"]
+
+    # get current values
+    wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
+    wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
+
+    # calculate difference
+    wirkenergie_bezug_difference = wirkenergie_bezug_new - wirkenergie_bezug_old
+    wirkenergie_lieferung_difference = wirkenergie_lieferung_new - wirkenergie_lieferung_old
+else:
+    wirkenergie_bezug_difference = 0
+    wirkenergie_lieferung_difference = 0
+
+# create difference entries
+json_history_entry_wirkenergie_bezug_dif = {}
+json_history_entry_wirkenergie_bezug_dif["value"] = wirkenergie_bezug_difference
+json_history_entry_wirkenergie_bezug_dif["unit"] = json_current["Wirkenergie A+"]["unit"]
+json_history_entry_wirkenergie_lieferung_dif = {}
+json_history_entry_wirkenergie_lieferung_dif["value"] = wirkenergie_lieferung_difference
+json_history_entry_wirkenergie_lieferung_dif["unit"] = json_current["Wirkenergie A-"]["unit"]
+
+# create new entry
+json_history_entry = {}
+json_history_entry["Datum"] = json_current["Datum"]["value"]
+json_history_entry["Wirkenergie A+"] = json_current["Wirkenergie A+"]
+json_history_entry["Wirkenergie A-"] = json_current["Wirkenergie A-"]
+json_history_entry["Wirkenergie Bezug Diff"] = json_history_entry_wirkenergie_bezug_dif
+json_history_entry["Wirkenergie Lieferung Diff"] = json_history_entry_wirkenergie_lieferung_dif
+
+filtered_data.append(json_history_entry)
+
+# Step 4: Write the updated list back to the JSON file
+with open(history_file, 'w') as file:
+    json.dump(filtered_data, file, indent=4, default=str)
 
