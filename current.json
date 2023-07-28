@@ -1,0 +1,59 @@
+{
+  "Datum": {
+    "value": "2023-07-28 21:33:10"
+  },
+  "Zaehlernummer": {
+    "value": "1KFM0200175269"
+  },
+  "Logical Device Name": {
+    "value": "KFM1200200175269"
+  },
+  "Wirkenergie A+": {
+    "value": 3752681.0,
+    "unit": "Wh"
+  },
+  "Wirkenergie A-": {
+    "value": 3974191.0,
+    "unit": "Wh"
+  },
+  "Wirkleistung P+": {
+    "value": 257.0,
+    "unit": "W"
+  },
+  "Wirkleistung P-": {
+    "value": 0.0,
+    "unit": "W"
+  },
+  "Blindenergie Q+": {
+    "value": 13478.0,
+    "unit": "varh"
+  },
+  "Blindenergie Q-": {
+    "value": 1320834.0,
+    "unit": "varh"
+  },
+  "Spannung L1": {
+    "value": 232.6,
+    "unit": "V"
+  },
+  "Spannung L2": {
+    "value": 232.7,
+    "unit": "V"
+  },
+  "Spannung L3": {
+    "value": 232.6,
+    "unit": "V"
+  },
+  "Strom L1": {
+    "value": 0.9,
+    "unit": "A"
+  },
+  "Strom L2": {
+    "value": 0.62,
+    "unit": "A"
+  },
+  "Strom L3": {
+    "value": 0.26,
+    "unit": "A"
+  }
+}

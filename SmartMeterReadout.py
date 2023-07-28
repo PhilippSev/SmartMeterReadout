@@ -11,7 +11,6 @@
 #######################################
 
 import serial
-import time
 from Crypto.Cipher import AES
 from enum import Enum
 from datetime import datetime, timedelta
@@ -21,8 +20,8 @@ import json
 # Configuration
 
 history_hours = 24
-history_file = "history.json"
-current_file = "current.json"
+history_file = "/var/www/html/history.json"
+current_file = "/var/www/html/current.json"
 serial_packet_bytes = 376
 
 #######################################
@@ -64,8 +63,11 @@ valueTuples = [
 ]
 
 mbus_start_bytes = b'\x68\xfa\xfa\x68'
-mbus_stop_bytes = b'\x16'
+mbus_stop_byte = b'\x16'
 obis_offset =  6 + 1 # 6 bytes octetString id + 1 byte something unknown
+
+#######################################
+# Initialization
 
 ser = serial.Serial("/dev/ttyS0", 
                     baudrate=2400, 
@@ -73,54 +75,67 @@ ser = serial.Serial("/dev/ttyS0",
                     stopbits=serial.STOPBITS_ONE, 
                     bytesize=serial.EIGHTBITS)
 
-# recieve data
-# synchronization is done by trying to read data for a timeout of
-# 1 second. When nothing is read before the timeout is reached, 
-# the read happened during the wait time of the SmartMeter is
-# which only transmits data every 5 seconds.
-# after this is detected, the data frame can be read fully.
-ser.timeout = 1
-while True:
-    data = ser.read(size=1)
-    if len(data) == 0:
-        break
+#######################################
+# Functions
 
-ser.timeout = None
-data = ser.read(size=serial_packet_bytes)
+def synchronizeSerial():
+    # recieve data
+    # synchronization is done by trying to read data for a timeout of
+    # 1 second. When nothing is read before the timeout is reached, 
+    # the read happened during the wait time of the SmartMeter is
+    # which only transmits data every 5 seconds.
+    # after this is detected, the data frame can be read fully.
+    ser.timeout = 1
+    while True:
+        data = ser.read(size=1)
+        if len(data) == 0:
+            break
+    ser.timeout = None
 
-print(data)
+def readPacket():
+    while True:
+        data = ser.read(size=serial_packet_bytes)
 
-# check if data is valid
-if len(data) != serial_packet_bytes:
-    raise Exception("Invalid data length")
-elif data[0:4] != mbus_start_bytes:
-    raise Exception("Invalid start bytes")
+        # check if data is valid
+        if len(data) != serial_packet_bytes:
+            #raise Exception("Invalid data length")
+            synchronizeSerial()
+            continue
+        elif data[0:4] != mbus_start_bytes:
+            #raise Exception("Invalid start bytes")
+            synchronizeSerial()
+            continue
+        elif data[-1:] != mbus_stop_byte:
+            synchronizeSerial()
+            continue
+        return data
 
-# read key from file
-key_file = open("key.txt", "r")
-key_string = key_file.readline().strip()
-key_file.close()
-key = bytes.fromhex(key_string)
+def readKey():
+    # read key from file
+    key_file = open("key.txt", "r")
+    key_string = key_file.readline().strip()
+    key_file.close()
+    return bytes.fromhex(key_string)
 
-msglen1 = int(hex(data[1]),16) # 1. FA - 250 Byte
+def decrypt(data, key):
+    msglen1 = int(hex(data[1]),16) # 1. FA - 250 Byte
 
-header1 = 27
-header2 = 9
+    header1 = 27
+    header2 = 9
 
-systitle = data[11:19] # System Title - 8 Bytes
-framecounter = data[23:27] # Frame Counter - 4 Bytes
-nonce = systitle + framecounter # iv ist 12 Bytes
+    systitle = data[11:19] # System Title - 8 Bytes
+    framecounter = data[23:27] # Frame Counter - 4 Bytes
+    nonce = systitle + framecounter # iv ist 12 Bytes
 
-msg1 = data[header1:(6 + msglen1 - 2)]
-msglen2 = int(hex(data[msglen1 + 7]), 16)
-msg2 = data[msglen1 + 6 + header2:(msglen1 + 5 + 5 + msglen2)]
+    msg1 = data[header1:(6 + msglen1 - 2)]
+    msglen2 = int(hex(data[msglen1 + 7]), 16)
+    msg2 = data[msglen1 + 6 + header2:(msglen1 + 5 + 5 + msglen2)]
 
-cyphertext = msg1 + msg2
+    cyphertext = msg1 + msg2
 
-cyphertext_bytes = bytes.fromhex(cyphertext.hex())
-cipher = AES.new(key, AES.MODE_GCM,  nonce)
-plaintext_bytes = cipher.decrypt(cyphertext_bytes)
-
+    cyphertext_bytes = bytes.fromhex(cyphertext.hex())
+    cipher = AES.new(key, AES.MODE_GCM,  nonce)
+    return cipher.decrypt(cyphertext_bytes)
 
 def getValueLength(type, value_pos, bytes):
     if type == Type.UInt16:
@@ -134,7 +149,7 @@ def getValueLength(type, value_pos, bytes):
     else:
         raise Exception("Unknown type")
     
-def getValueConverted(type, bytes, length):
+def getValueConverted(type, bytes, value_pos, length):
     # read obis value bytes
     value_start = value_pos + obis_offset + length[0]
     value_end = value_pos + obis_offset + length[0] + length[1]
@@ -174,84 +189,100 @@ def getValueConverted(type, bytes, length):
         raise Exception("Unknown type")
     return (value_converted, value_unit)
 
-json_current = {}
+def getJsonCurrent(plaintext):
+    json_current = {}
 
-# read values from plaintext
-for value in valueTuples:
-    value_pos = plaintext_bytes.find(value[0])
-    if value_pos == -1: 
-        # skipp value if not found
-        continue 
+    # read values from plaintext
+    for value in valueTuples:
+        value_pos = plaintext.find(value[0])
+        if value_pos == -1: 
+            # skipp value if not found
+            continue 
 
-    # get size of data type
-    length = getValueLength(value[1], value_pos, plaintext_bytes)
+        # get size of data type
+        length = getValueLength(value[1], value_pos, plaintext)
 
-    # convert obis value to usable value
-    value_converted = getValueConverted(value[1], plaintext_bytes, length)
-    print(value[2], value_converted)
+        # convert obis value to usable value
+        value_converted = getValueConverted(value[1], plaintext, value_pos, length)
+        #print(value[2], value_converted)
 
-    # store value as json
-    json_inner = {}
-    json_inner["value"] = value_converted[0]
-    if value_converted[1] != None:
-        json_inner["unit"] = value_converted[1]
-    json_current[value[2]] = json_inner
+        # store value as json
+        json_inner = {}
+        json_inner["value"] = value_converted[0]
+        if value_converted[1] != None:
+            json_inner["unit"] = value_converted[1]
+        json_current[value[2]] = json_inner
+    return json_current
 
-# Serializing json
-json_object = json.dumps(json_current, indent=4, default=str)
+def updateJsonCurrent(json_current):
+    # Serializing json
+    json_object = json.dumps(json_current, indent=2, default=str)
 
-# Writing current values to file
-with open(current_file, "w") as outfile:
-    outfile.write(json_object)
+    # Writing current values to file
+    with open(current_file, "w") as outfile:
+        outfile.write(json_object)
 
-# update history
-try:
-    with open(history_file, "r") as file:
-        json_history = json.load(file)
+def updateJsonHistory(json_current):
+    # update history
+    try:
+        with open(history_file, "r") as file:
+            json_history = json.load(file)
 
-    # remove old entries from history json
-    current_time = datetime.now()
-    threshold_time = current_time - timedelta(hours=history_hours)
-    filtered_data = [pair for pair in json_history if datetime.fromisoformat(pair['Datum']) >= threshold_time]
-except:
-    filtered_data = []
+        # only update history every minute
+        time_difference = json_current["Datum"]["value"] - datetime.fromisoformat(json_history["Datum"])
+        if time_difference < timedelta(minutes=1):
+            return
 
-# get newest value and read Wirkenergie A+ and Wirkenergie A-
-if len(filtered_data) > 0:
-    last_entry = filtered_data[-1]
-    wirkenergie_bezug_old = last_entry["Wirkenergie A+"]["value"]
-    wirkenergie_lieferung_old = last_entry["Wirkenergie A-"]["value"]
+        # remove old entries from history json
+        current_time = datetime.now()
+        threshold_time = current_time - timedelta(hours=history_hours)
+        filtered_data = [pair for pair in json_history["data"] if datetime.fromisoformat(pair['Datum']) >= threshold_time]
 
-    # get current values
-    wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
-    wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
+        # read old Wirkenenergie A+ and A- values
+        wirkenergie_bezug_old = json_history["Wirkenergie A+ last"]
+        wirkenergie_lieferung_old = json_history["Wirkenergie A- last"]
 
-    # calculate difference
-    wirkenergie_bezug_difference = wirkenergie_bezug_new - wirkenergie_bezug_old
-    wirkenergie_lieferung_difference = wirkenergie_lieferung_new - wirkenergie_lieferung_old
-else:
-    wirkenergie_bezug_difference = 0
-    wirkenergie_lieferung_difference = 0
+        # get current values
+        wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
+        wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
 
-# create difference entries
-json_history_entry_wirkenergie_bezug_dif = {}
-json_history_entry_wirkenergie_bezug_dif["value"] = wirkenergie_bezug_difference
-json_history_entry_wirkenergie_bezug_dif["unit"] = json_current["Wirkenergie A+"]["unit"]
-json_history_entry_wirkenergie_lieferung_dif = {}
-json_history_entry_wirkenergie_lieferung_dif["value"] = wirkenergie_lieferung_difference
-json_history_entry_wirkenergie_lieferung_dif["unit"] = json_current["Wirkenergie A-"]["unit"]
+        # calculate watts from difference
+        time_difference_hours = time_difference.total_seconds() / 3600
+        wirkenergie_bezug_difference = (wirkenergie_bezug_new - wirkenergie_bezug_old) / time_difference_hours
+        wirkenergie_lieferung_difference = (wirkenergie_lieferung_new - wirkenergie_lieferung_old) / time_difference_hours
+    except:
+        filtered_data = []
+        wirkenergie_bezug_difference = 0
+        wirkenergie_lieferung_difference = 0
 
-# create new entry
-json_history_entry = {}
-json_history_entry["Datum"] = json_current["Datum"]["value"]
-json_history_entry["Wirkenergie A+"] = json_current["Wirkenergie A+"]
-json_history_entry["Wirkenergie A-"] = json_current["Wirkenergie A-"]
-json_history_entry["Wirkenergie Bezug Diff"] = json_history_entry_wirkenergie_bezug_dif
-json_history_entry["Wirkenergie Lieferung Diff"] = json_history_entry_wirkenergie_lieferung_dif
+    # create new entry
+    json_history_entry = {}
+    json_history_entry["Datum"] = json_current["Datum"]["value"]
+    json_history_entry["Wirkenergie Bezug Diff"] = round(wirkenergie_bezug_difference, 2)
+    json_history_entry["Wirkenergie Lieferung Diff"] = round(wirkenergie_lieferung_difference, 2)
 
-filtered_data.append(json_history_entry)
+    filtered_data.append(json_history_entry)
 
-# Step 4: Write the updated list back to the JSON file
-with open(history_file, 'w') as file:
-    json.dump(filtered_data, file, indent=4, default=str)
+    json_history = {}
+    json_history["Wirkenergie A+ last"] = json_current["Wirkenergie A+"]["value"]
+    json_history["Wirkenergie A- last"] = json_current["Wirkenergie A-"]["value"]
+    json_history["Datum"] = json_current["Datum"]["value"]
+    json_history["data"] = filtered_data
 
+    # write history to file
+    with open(history_file, 'w') as file:
+        json.dump(json_history, file, indent=2, default=str)
+
+#######################################
+# Main
+
+key = readKey()
+synchronizeSerial()
+
+while True:
+    #print("Reading data...")
+    data = readPacket()
+    plaintext = decrypt(data, key)
+    json_current = getJsonCurrent(plaintext)
+    updateJsonCurrent(json_current)
+    updateJsonHistory(json_current)

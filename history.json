@@ -1,0 +1,17 @@
+{
+  "Wirkenergie A+ last": 3752681.0,
+  "Wirkenergie A- last": 3974191.0,
+  "Datum": "2023-07-28 21:33:10",
+  "data": [
+    {
+      "Datum": "2023-07-28 21:28:00",
+      "Wirkenergie Bezug Diff": 0,
+      "Wirkenergie Lieferung Diff": 0
+    },
+    {
+      "Datum": "2023-07-28 21:33:10",
+      "Wirkenergie Bezug Diff": 255.48,
+      "Wirkenergie Lieferung Diff": 0.0
+    }
+  ]
+}
