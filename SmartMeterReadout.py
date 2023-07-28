@@ -23,6 +23,7 @@ import json
 history_hours = 24
 history_file = "history.json"
 current_file = "current.json"
+serial_packet_bytes = 376
 
 #######################################
 # Enums and constants
@@ -62,23 +63,44 @@ valueTuples = [
     (b'\x01\x00\x0D\x07\x00\xFF', Type.UInt16,      "Leistungsfaktor"),
 ]
 
-#ser = serial.Serial("/dev/ttyS0", baudrate=2400, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS, timeout=10)
-
 mbus_start_bytes = b'\x68\xfa\xfa\x68'
 mbus_stop_bytes = b'\x16'
-obis_offset =  6 + 1 # 6 bytes octetString id + 1 byte
+obis_offset =  6 + 1 # 6 bytes octetString id + 1 byte something unknown
+
+ser = serial.Serial("/dev/ttyS0", 
+                    baudrate=2400, 
+                    parity=serial.PARITY_NONE, 
+                    stopbits=serial.STOPBITS_ONE, 
+                    bytesize=serial.EIGHTBITS)
+
+# recieve data
+# synchronization is done by trying to read data for a timeout of
+# 1 second. When nothing is read before the timeout is reached, 
+# the read happened during the wait time of the SmartMeter is
+# which only transmits data every 5 seconds.
+# after this is detected, the data frame can be read fully.
+ser.timeout = 1
+while True:
+    data = ser.read(size=1)
+    if len(data) == 0:
+        break
+
+ser.timeout = None
+data = ser.read(size=serial_packet_bytes)
+
+print(data)
+
+# check if data is valid
+if len(data) != serial_packet_bytes:
+    raise Exception("Invalid data length")
+elif data[0:4] != mbus_start_bytes:
+    raise Exception("Invalid start bytes")
 
 # read key from file
 key_file = open("key.txt", "r")
 key_string = key_file.readline().strip()
 key_file.close()
 key = bytes.fromhex(key_string)
-
-
-data_file = open("reference/capture_vkw.txt", "r")
-data_string = data_file.readline().strip()
-data_file.close()
-data = bytes.fromhex(data_string)
 
 msglen1 = int(hex(data[1]),16) # 1. FA - 250 Byte
 
@@ -123,10 +145,10 @@ def getValueConverted(type, bytes, length):
 
     if type == Type.UInt16 or type == Type.UInt32:
         # convert bytes to int
-        value_int = int.from_bytes(value_bytes)
+        value_int = int.from_bytes(value_bytes, byteorder='big', signed=False)
         # get scaling value
-        value_scaling_raw = bytes[value_end + 3]
-        value_scaling = byte_to_signed_integer(value_scaling_raw)
+        value_scaling_raw = bytes[value_end + 3:value_end + 4]
+        value_scaling = int.from_bytes(value_scaling_raw, byteorder='big', signed=True)
         # apply scaling
         value_converted = float(value_int) * pow(10.0, value_scaling)
         value_converted = round(value_converted, 2)
@@ -141,23 +163,16 @@ def getValueConverted(type, bytes, length):
 
     elif type == Type.Date:
         # convert bytes to datetime
-        jear = int.from_bytes(value_bytes[:2])
-        month = int.from_bytes(value_bytes[2:3])
-        day = int.from_bytes(value_bytes[3:4])
-        hour = int.from_bytes(value_bytes[5:6])
-        minute = int.from_bytes(value_bytes[6:7])
-        second = int.from_bytes(value_bytes[7:8])
-        value_converted = datetime(jear,month,day,hour,minute,second)
+        year = int.from_bytes(value_bytes[:2], byteorder='big', signed=False)
+        month = int.from_bytes(value_bytes[2:3], byteorder='big', signed=False)
+        day = int.from_bytes(value_bytes[3:4], byteorder='big', signed=False)
+        hour = int.from_bytes(value_bytes[5:6], byteorder='big', signed=False)
+        minute = int.from_bytes(value_bytes[6:7], byteorder='big', signed=False)
+        second = int.from_bytes(value_bytes[7:8], byteorder='big', signed=False)
+        value_converted = datetime(year,month,day,hour,minute,second)
     else:
         raise Exception("Unknown type")
-    
     return (value_converted, value_unit)
-    
-def byte_to_signed_integer(byte):
-    if byte & 0x80:
-        # 2's complement
-        return -((~byte & 0xFF) + 1) 
-    return byte
 
 json_current = {}
 
