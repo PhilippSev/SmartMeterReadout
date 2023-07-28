@@ -16,12 +16,6 @@ from Crypto.Cipher import AES
 from enum import Enum
 import datetime 
 
-#ser = serial.Serial("/dev/ttyS0", baudrate=2400, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS, timeout=10)
-
-mbus_start_bytes = b'\x68\xfa\xfa\x68'
-mbus_stop_bytes = b'\x16'
-obis_offset =  6 + 1 # 6 bytes octetString id + 1 byte
-
 units = {
     # byte  : unit
     0x1b : "W",
@@ -57,6 +51,12 @@ valueTuples = [
     (b'\x01\x00\x0D\x07\x00\xFF', Type.UInt16,      "Leistungsfaktor"),
 ]
 
+#ser = serial.Serial("/dev/ttyS0", baudrate=2400, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS, timeout=10)
+
+mbus_start_bytes = b'\x68\xfa\xfa\x68'
+mbus_stop_bytes = b'\x16'
+obis_offset =  6 + 1 # 6 bytes octetString id + 1 byte
+
 # read key from file
 key_file = open("key.txt", "r")
 key_string = key_file.readline().strip()
@@ -87,7 +87,7 @@ cyphertext = msg1 + msg2
 cyphertext_bytes = bytes.fromhex(cyphertext.hex())
 cipher = AES.new(key, AES.MODE_GCM,  nonce)
 plaintext_bytes = cipher.decrypt(cyphertext_bytes)
-print(plaintext_bytes.hex())
+
 
 def getValueLength(type, value_pos, bytes):
     if type == Type.UInt16:
@@ -101,23 +101,45 @@ def getValueLength(type, value_pos, bytes):
     else:
         raise Exception("Unknown type")
     
-def getValueConverted(type, value_bytes):
-    if type == Type.UInt16:
-        return int.from_bytes(value_bytes)
-    elif type == Type.UInt32:
-        return int.from_bytes(value_bytes)
+def getValueConverted(type, bytes, length):
+    # read obis value bytes
+    value_start = value_pos + obis_offset + length[0]
+    value_end = value_pos + obis_offset + length[0] + length[1]
+    value_bytes = bytes[value_start:value_end]
+
+    value_converted = None
+    value_unit = None
+
+    if type == Type.UInt16 or type == Type.UInt32:
+        # convert bytes to int
+        value_int = int.from_bytes(value_bytes)
+        # get scaling value
+        value_scaling_raw = bytes[value_end + 3]
+        value_scaling = byte_to_signed_integer(value_scaling_raw)
+        # apply scaling
+        value_converted = float(value_int) * pow(10.0, value_scaling)
+        # get unit if known
+        value_unit_enum = bytes[value_end + 5]
+        if value_unit_enum in units:
+            value_unit = units[value_unit_enum]
+
     elif type == Type.OctetString:
-        return value_bytes.decode("ascii")
+        # convert bytes to string
+        value_converted = value_bytes.decode("ascii")
+
     elif type == Type.Date:
+        # convert bytes to datetime
         jear = int.from_bytes(value_bytes[:2])
         month = int.from_bytes(value_bytes[2:3])
         day = int.from_bytes(value_bytes[3:4])
         hour = int.from_bytes(value_bytes[5:6])
         minute = int.from_bytes(value_bytes[6:7])
         second = int.from_bytes(value_bytes[7:8])
-        return datetime.datetime(jear,month,day,hour,minute,second)
+        value_converted = datetime.datetime(jear,month,day,hour,minute,second)
     else:
         raise Exception("Unknown type")
+    
+    return (value_converted, value_unit)
     
 def byte_to_signed_integer(byte):
     if byte & 0x80:
@@ -135,29 +157,9 @@ for value in valueTuples:
     # get size of data type
     length = getValueLength(value[1], value_pos, plaintext_bytes)
 
-    # read obis value bytes
-    value_start = value_pos + obis_offset + length[0]
-    value_end = value_pos + obis_offset + length[0] + length[1]
-    obis_value = plaintext_bytes[value_start:value_end]
-
     # convert obis value to usable value
-    value_converted = getValueConverted(value[1], obis_value)
+    value_converted = getValueConverted(value[1], plaintext_bytes, length)
 
-    if value[1] == Type.UInt16 or value[1] == Type.UInt32:
-        # get scaling
-        value_scaling_raw = plaintext_bytes[value_end + 3]
-        if value_scaling_raw & (1 << 7):
-            value_scaling = value_scaling_raw - 256
-        else:
-            value_scaling = value_scaling_raw
-
-        # apply scaling
-        value_converted = float(value_converted) * pow(10.0, value_scaling)
-
-        # get unit
-        value_unit_enum = plaintext_bytes[value_end + 5]
-        if value_unit_enum in units:
-            value_unit = units[value_unit_enum]
 
     print(value[2], value_converted)
 
