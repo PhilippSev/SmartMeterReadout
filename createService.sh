@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cp smartmeterreadout.service /etc/systemd/user/smartmeterreadout.service
-systemctl --user daemon-reload 
+cp smartmeterreadout.service /lib/systemd/system
+systemctl daemon-reload 
 systemctl enable smartmeterreadout.service
 systemctl start smartmeterreadout.service
+systemctl status smartmeterreadout.service

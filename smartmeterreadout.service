@@ -2,7 +2,10 @@
 Description=SmartMeter Readout Tool
 
 [Service]
-WorkingDirectory=/home/pi/smartmeter
-ExecStart=python3 SmartMeterReadout.py
+WorkingDirectory=/home/pi/readout
+ExecStart=pypy3 SmartMeterReadout.py
 Restart=on-failure
 RestartSec=30
+
+[Install]
+WantedBy=mult-user.target

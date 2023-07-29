@@ -15,13 +15,16 @@ from Crypto.Cipher import AES
 from enum import Enum
 from datetime import datetime, timedelta
 import json
+import os
 
 #######################################
 # Configuration
 
-history_hours = 24
-history_file = "/var/www/html/history.json"
-current_file = "/var/www/html/current.json"
+history_keep_hours = 24
+hostory_update_minutes = 1
+directory = "/ram/www"
+history_file = "/ram/www/history.json"
+current_file = "/ram/www/current.json"
 serial_packet_bytes = 376
 
 #######################################
@@ -75,6 +78,9 @@ ser = serial.Serial("/dev/ttyS0",
                     stopbits=serial.STOPBITS_ONE, 
                     bytesize=serial.EIGHTBITS)
 
+if not os.path.exists(directory):
+    os.mkdir(directory, 0o777)
+
 #######################################
 # Functions
 
@@ -89,8 +95,8 @@ def synchronizeSerial():
     while True:
         data = ser.read(size=1)
         if len(data) == 0:
+            ser.timeout = None
             break
-    ser.timeout = None
 
 def readPacket():
     while True:
@@ -230,12 +236,12 @@ def updateJsonHistory(json_current):
 
         # only update history every minute
         time_difference = json_current["Datum"]["value"] - datetime.fromisoformat(json_history["Datum"])
-        if time_difference < timedelta(minutes=1):
+        if time_difference < timedelta(minutes=hostory_update_minutes):
             return
 
         # remove old entries from history json
         current_time = datetime.now()
-        threshold_time = current_time - timedelta(hours=history_hours)
+        threshold_time = current_time - timedelta(hours=history_keep_hours)
         filtered_data = [pair for pair in json_history["data"] if datetime.fromisoformat(pair['Datum']) >= threshold_time]
 
         # read old Wirkenenergie A+ and A- values
