@@ -3,10 +3,11 @@
 # SmartMeterReadout.py
 #
 # This script reads out the smart meter and stores it to json files that can be used by the webserver.
+# More details can be found in my blog post: 
+# https://projekte.philippseverin.at/2023/08/04/smartmeter-mit-raspberrypi-auslesen/
 #
 # Inspired by and based on:
 # https://github.com/micronano0/RaspberryPi-Kaifa-SmartMeter-Reader/blob/main/kaifa_kundenschnittstelle_auslesen.py
-# https://www.michaelreitbauer.at/kaifa-ma309-auslesen-smart-meter-evn/?utm_source=pocket_saves
 #
 #######################################
 
