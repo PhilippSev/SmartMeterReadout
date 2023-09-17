@@ -1,8 +1,8 @@
 # SmartMeter Readout
 
-Smart Meter Readout is a small python script that periodically reads the values from a KAIFA SmartMeter using the MBUS customer interface.
-It is was tested on a RaspberryPi with an MBus adapter.
-The read values are then saved as json files that can be used by a Webserver.
+Smart Meter Readout is a small Python script that periodically reads the values from a KAIFA CL101 Smartmeter from VKW using the MBUS customer interface.
+It is was tested on a RaspberryPi Zero W with an MBus adapter.
+The received values are then saved as json files that can be used by a Webserver.
 
 ## Detailed Description and required Hardware
 A detailed description of the project and the required hardware can be found on [my blog](https://projekte.philippseverin.at/2023/08/04/smartmeter-mit-raspberrypi-auslesen/).
