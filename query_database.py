@@ -156,8 +156,6 @@ def print_history_summary(hours=24):
         print(f"Time range: {earliest['timestamp']} to {latest['timestamp']}")
         print(f"Latest energy consumption: {latest['wirkenergie_bezug']} Wh")
         print(f"Latest energy production: {latest['wirkenergie_lieferung']} Wh")
-        print(f"Latest power consumption: {latest['wirkleistung_bezug']} W")
-        print(f"Latest power production: {latest['wirkleistung_lieferung']} W")
         
         if len(history) >= 2:
             # Calculate total energy change over the period

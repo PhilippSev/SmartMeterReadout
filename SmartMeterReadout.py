@@ -110,15 +110,13 @@ def init_database():
         )
     ''')
     
-    # Create history table - stores absolute values over time
+    # Create history table - stores absolute energy values over time
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY,
             timestamp DATETIME,
             wirkenergie_bezug REAL,
             wirkenergie_lieferung REAL,
-            wirkleistung_bezug REAL,
-            wirkleistung_lieferung REAL,
             UNIQUE(timestamp)
         )
     ''')
@@ -336,21 +334,17 @@ def updateHistory(json_current):
                 conn.close()
                 return
         
-        # Insert new history entry with absolute values
+        # Insert new history entry with absolute energy values
         cursor.execute('''
             INSERT OR REPLACE INTO history (
                 timestamp, 
                 wirkenergie_bezug, 
-                wirkenergie_lieferung,
-                wirkleistung_bezug,
-                wirkleistung_lieferung
-            ) VALUES (?, ?, ?, ?, ?)
+                wirkenergie_lieferung
+            ) VALUES (?, ?, ?)
         ''', (
             current_timestamp,
             json_current.get("Wirkenergie A+", {}).get("value"),
-            json_current.get("Wirkenergie A-", {}).get("value"),
-            json_current.get("Wirkleistung P+", {}).get("value"),
-            json_current.get("Wirkleistung P-", {}).get("value")
+            json_current.get("Wirkenergie A-", {}).get("value")
         ))
         
         # Remove old entries from history
