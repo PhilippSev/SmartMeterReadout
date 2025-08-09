@@ -17,15 +17,15 @@ from enum import Enum
 from datetime import datetime, timedelta
 import json
 import os
+import sqlite3
 
 #######################################
 # Configuration
 
 history_keep_hours = 24
 hostory_update_minutes = 1
-directory = "/ram/www"
-history_file = "/ram/www/history.json"
-current_file = "/ram/www/current.json"
+directory = "/home/pi/smartmeter_data"
+database_file = "/home/pi/smartmeter_data/smartmeter.db"
 serial_packet_bytes = 376
 
 #######################################
@@ -81,6 +81,53 @@ ser = serial.Serial("/dev/ttyS0",
 
 if not os.path.exists(directory):
     os.mkdir(directory, 0o777)
+
+# Initialize database
+def init_database():
+    conn = sqlite3.connect(database_file)
+    cursor = conn.cursor()
+    
+    # Create current readings table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS current_readings (
+            id INTEGER PRIMARY KEY,
+            timestamp DATETIME,
+            meter_number TEXT,
+            logical_device_name TEXT,
+            wirkenergie_bezug REAL,
+            wirkenergie_lieferung REAL,
+            wirkleistung_bezug REAL,
+            wirkleistung_lieferung REAL,
+            blindenergie_bezug REAL,
+            blindenergie_lieferung REAL,
+            spannung_l1 REAL,
+            spannung_l2 REAL,
+            spannung_l3 REAL,
+            strom_l1 REAL,
+            strom_l2 REAL,
+            strom_l3 REAL,
+            leistungsfaktor REAL
+        )
+    ''')
+    
+    # Create history table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY,
+            timestamp DATETIME,
+            wirkenergie_bezug_diff REAL,
+            wirkenergie_lieferung_diff REAL,
+            UNIQUE(timestamp)
+        )
+    ''')
+    
+    # Create index on timestamp for better performance
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp)')
+    
+    conn.commit()
+    conn.close()
+
+init_database()
 
 #######################################
 # Functions
@@ -221,64 +268,196 @@ def getJsonCurrent(plaintext):
         json_current[value[2]] = json_inner
     return json_current
 
-def updateJsonCurrent(json_current):
-    # Serializing json
-    json_object = json.dumps(json_current, indent=2, default=str)
+def updateCurrentReading(json_current):
+    conn = sqlite3.connect(database_file)
+    cursor = conn.cursor()
+    
+    # Clear previous current reading (keep only the latest)
+    cursor.execute('DELETE FROM current_readings')
+    
+    # Insert new current reading
+    cursor.execute('''
+        INSERT INTO current_readings (
+            timestamp, meter_number, logical_device_name,
+            wirkenergie_bezug, wirkenergie_lieferung,
+            wirkleistung_bezug, wirkleistung_lieferung,
+            blindenergie_bezug, blindenergie_lieferung,
+            spannung_l1, spannung_l2, spannung_l3,
+            strom_l1, strom_l2, strom_l3, leistungsfaktor
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        json_current.get("Datum", {}).get("value"),
+        json_current.get("Zaehlernummer", {}).get("value"),
+        json_current.get("Logical Device Name", {}).get("value"),
+        json_current.get("Wirkenergie A+", {}).get("value"),
+        json_current.get("Wirkenergie A-", {}).get("value"),
+        json_current.get("Wirkleistung P+", {}).get("value"),
+        json_current.get("Wirkleistung P-", {}).get("value"),
+        json_current.get("Blindenergie Q+", {}).get("value"),
+        json_current.get("Blindenergie Q-", {}).get("value"),
+        json_current.get("Spannung L1", {}).get("value"),
+        json_current.get("Spannung L2", {}).get("value"),
+        json_current.get("Spannung L3", {}).get("value"),
+        json_current.get("Strom L1", {}).get("value"),
+        json_current.get("Strom L2", {}).get("value"),
+        json_current.get("Strom L3", {}).get("value"),
+        json_current.get("Leistungsfaktor", {}).get("value")
+    ))
+    
+    conn.commit()
+    conn.close()
 
-    # Writing current values to file
-    with open(current_file, "w") as outfile:
-        outfile.write(json_object)
-
-def updateJsonHistory(json_current):
-    # update history
+def updateHistory(json_current):
+    conn = sqlite3.connect(database_file)
+    cursor = conn.cursor()
+    
+    current_timestamp = json_current["Datum"]["value"]
+    
     try:
-        with open(history_file, "r") as file:
-            json_history = json.load(file)
+        # Get the last history entry to check time difference
+        cursor.execute('''
+            SELECT timestamp, wirkenergie_bezug_diff, wirkenergie_lieferung_diff 
+            FROM history 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+        ''')
+        last_entry = cursor.fetchone()
+        
+        # Get the last wirkenergie values from current_readings history
+        cursor.execute('''
+            SELECT wirkenergie_bezug, wirkenergie_lieferung, timestamp
+            FROM current_readings 
+            ORDER BY timestamp DESC 
+            LIMIT 1 OFFSET 1
+        ''')
+        last_reading = cursor.fetchone()
+        
+        if last_entry and last_reading:
+            last_timestamp = datetime.fromisoformat(last_entry[0])
+            time_difference = current_timestamp - last_timestamp
+            
+            # Only update history every minute
+            if time_difference < timedelta(minutes=hostory_update_minutes):
+                conn.close()
+                return
+            
+            # Get current and old values
+            wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
+            wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
+            wirkenergie_bezug_old = last_reading[0]
+            wirkenergie_lieferung_old = last_reading[1]
+            
+            # Calculate watts from difference
+            time_difference_hours = time_difference.total_seconds() / 3600
+            wirkenergie_bezug_difference = (wirkenergie_bezug_new - wirkenergie_bezug_old) / time_difference_hours
+            wirkenergie_lieferung_difference = (wirkenergie_lieferung_new - wirkenergie_lieferung_old) / time_difference_hours
+        else:
+            wirkenergie_bezug_difference = 0
+            wirkenergie_lieferung_difference = 0
+        
+        # Insert new history entry
+        cursor.execute('''
+            INSERT OR REPLACE INTO history (timestamp, wirkenergie_bezug_diff, wirkenergie_lieferung_diff)
+            VALUES (?, ?, ?)
+        ''', (
+            current_timestamp,
+            round(wirkenergie_bezug_difference, 2),
+            round(wirkenergie_lieferung_difference, 2)
+        ))
+        
+        # Remove old entries from history
+        threshold_time = datetime.now() - timedelta(hours=history_keep_hours)
+        cursor.execute('DELETE FROM history WHERE timestamp < ?', (threshold_time,))
+        
+        conn.commit()
+        
+    except Exception as e:
+        print(f"Error updating history: {e}")
+    finally:
+        conn.close()
 
-        # only update history every minute
-        time_difference = json_current["Datum"]["value"] - datetime.fromisoformat(json_history["Datum"])
-        if time_difference < timedelta(minutes=hostory_update_minutes):
-            return
+def getCurrentReading():
+    """Get the current/latest reading from the database"""
+    conn = sqlite3.connect(database_file)
+    conn.row_factory = sqlite3.Row  # This allows column access by name
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM current_readings ORDER BY timestamp DESC LIMIT 1')
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        return dict(result)
+    return None
 
-        # remove old entries from history json
-        current_time = datetime.now()
-        threshold_time = current_time - timedelta(hours=history_keep_hours)
-        filtered_data = [pair for pair in json_history["data"] if datetime.fromisoformat(pair['Datum']) >= threshold_time]
+def getHistory(hours=24):
+    """Get historical data for the specified number of hours"""
+    conn = sqlite3.connect(database_file)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    threshold_time = datetime.now() - timedelta(hours=hours)
+    cursor.execute('''
+        SELECT * FROM history 
+        WHERE timestamp >= ? 
+        ORDER BY timestamp ASC
+    ''', (threshold_time,))
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in results]
 
-        # read old Wirkenenergie A+ and A- values
-        wirkenergie_bezug_old = json_history["Wirkenergie A+ last"]
-        wirkenergie_lieferung_old = json_history["Wirkenergie A- last"]
+def getHistoryAsJson(hours=24):
+    """Get historical data in the same format as the original JSON file"""
+    current = getCurrentReading()
+    history_data = getHistory(hours)
+    
+    if not current:
+        return None
+    
+    json_history = {
+        "Wirkenergie A+ last": current["wirkenergie_bezug"],
+        "Wirkenergie A- last": current["wirkenergie_lieferung"], 
+        "Datum": current["timestamp"],
+        "data": []
+    }
+    
+    for entry in history_data:
+        json_history["data"].append({
+            "Datum": entry["timestamp"],
+            "Wirkenergie Bezug Diff": entry["wirkenergie_bezug_diff"],
+            "Wirkenergie Lieferung Diff": entry["wirkenergie_lieferung_diff"]
+        })
+    
+    return json_history
 
-        # get current values
-        wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
-        wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
-
-        # calculate watts from difference
-        time_difference_hours = time_difference.total_seconds() / 3600
-        wirkenergie_bezug_difference = (wirkenergie_bezug_new - wirkenergie_bezug_old) / time_difference_hours
-        wirkenergie_lieferung_difference = (wirkenergie_lieferung_new - wirkenergie_lieferung_old) / time_difference_hours
-    except:
-        filtered_data = []
-        wirkenergie_bezug_difference = 0
-        wirkenergie_lieferung_difference = 0
-
-    # create new entry
-    json_history_entry = {}
-    json_history_entry["Datum"] = json_current["Datum"]["value"]
-    json_history_entry["Wirkenergie Bezug Diff"] = round(wirkenergie_bezug_difference, 2)
-    json_history_entry["Wirkenergie Lieferung Diff"] = round(wirkenergie_lieferung_difference, 2)
-
-    filtered_data.append(json_history_entry)
-
-    json_history = {}
-    json_history["Wirkenergie A+ last"] = json_current["Wirkenergie A+"]["value"]
-    json_history["Wirkenergie A- last"] = json_current["Wirkenergie A-"]["value"]
-    json_history["Datum"] = json_current["Datum"]["value"]
-    json_history["data"] = filtered_data
-
-    # write history to file
-    with open(history_file, 'w') as file:
-        json.dump(json_history, file, indent=2, default=str)
+def getCurrentAsJson():
+    """Get current reading in the same format as the original JSON file"""
+    current = getCurrentReading()
+    if not current:
+        return None
+    
+    json_current = {
+        "Datum": {"value": current["timestamp"]},
+        "Zaehlernummer": {"value": current["meter_number"]},
+        "Logical Device Name": {"value": current["logical_device_name"]},
+        "Wirkenergie A+": {"value": current["wirkenergie_bezug"], "unit": "Wh"},
+        "Wirkenergie A-": {"value": current["wirkenergie_lieferung"], "unit": "Wh"},
+        "Wirkleistung P+": {"value": current["wirkleistung_bezug"], "unit": "W"},
+        "Wirkleistung P-": {"value": current["wirkleistung_lieferung"], "unit": "W"},
+        "Blindenergie Q+": {"value": current["blindenergie_bezug"], "unit": "varh"},
+        "Blindenergie Q-": {"value": current["blindenergie_lieferung"], "unit": "varh"},
+        "Spannung L1": {"value": current["spannung_l1"], "unit": "V"},
+        "Spannung L2": {"value": current["spannung_l2"], "unit": "V"},
+        "Spannung L3": {"value": current["spannung_l3"], "unit": "V"},
+        "Strom L1": {"value": current["strom_l1"], "unit": "A"},
+        "Strom L2": {"value": current["strom_l2"], "unit": "A"},
+        "Strom L3": {"value": current["strom_l3"], "unit": "A"},
+        "Leistungsfaktor": {"value": current["leistungsfaktor"]}
+    }
+    
+    return json_current
 
 #######################################
 # Main
@@ -291,5 +470,5 @@ while True:
     data = readPacket()
     plaintext = decrypt(data, key)
     json_current = getJsonCurrent(plaintext)
-    updateJsonCurrent(json_current)
-    updateJsonHistory(json_current)
+    updateCurrentReading(json_current)
+    updateHistory(json_current)
