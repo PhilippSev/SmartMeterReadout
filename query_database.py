@@ -84,22 +84,41 @@ def export_history_as_json(hours=24):
     current = get_current_reading()
     history_data = get_history(hours)
     
-    if not current:
+    if not current or len(history_data) < 2:
         return None
+    
+    # Calculate differences for backwards compatibility
+    calculated_data = []
+    for i in range(1, len(history_data)):
+        prev_entry = history_data[i-1]
+        curr_entry = history_data[i]
+        
+        # Calculate time difference
+        prev_time = datetime.fromisoformat(prev_entry["timestamp"])
+        curr_time = datetime.fromisoformat(curr_entry["timestamp"])
+        time_diff_hours = (curr_time - prev_time).total_seconds() / 3600
+        
+        if time_diff_hours > 0:
+            # Calculate energy differences
+            energy_bezug_diff = curr_entry["wirkenergie_bezug"] - prev_entry["wirkenergie_bezug"]
+            energy_lieferung_diff = curr_entry["wirkenergie_lieferung"] - prev_entry["wirkenergie_lieferung"]
+            
+            # Convert to average power
+            power_bezug_diff = energy_bezug_diff / time_diff_hours
+            power_lieferung_diff = energy_lieferung_diff / time_diff_hours
+            
+            calculated_data.append({
+                "Datum": curr_entry["timestamp"],
+                "Wirkenergie Bezug Diff": round(power_bezug_diff, 2),
+                "Wirkenergie Lieferung Diff": round(power_lieferung_diff, 2)
+            })
     
     json_history = {
         "Wirkenergie A+ last": current["wirkenergie_bezug"],
         "Wirkenergie A- last": current["wirkenergie_lieferung"], 
         "Datum": current["timestamp"],
-        "data": []
+        "data": calculated_data
     }
-    
-    for entry in history_data:
-        json_history["data"].append({
-            "Datum": entry["timestamp"],
-            "Wirkenergie Bezug Diff": entry["wirkenergie_bezug_diff"],
-            "Wirkenergie Lieferung Diff": entry["wirkenergie_lieferung_diff"]
-        })
     
     return json_history
 
@@ -133,15 +152,30 @@ def print_history_summary(hours=24):
     
     if history:
         latest = history[-1]
-        print(f"Latest entry: {latest['timestamp']}")
-        print(f"Latest consumption diff: {latest['wirkenergie_bezug_diff']} W")
-        print(f"Latest production diff: {latest['wirkenergie_lieferung_diff']} W")
+        earliest = history[0]
+        print(f"Time range: {earliest['timestamp']} to {latest['timestamp']}")
+        print(f"Latest energy consumption: {latest['wirkenergie_bezug']} Wh")
+        print(f"Latest energy production: {latest['wirkenergie_lieferung']} Wh")
+        print(f"Latest power consumption: {latest['wirkleistung_bezug']} W")
+        print(f"Latest power production: {latest['wirkleistung_lieferung']} W")
         
-        # Calculate averages
-        avg_consumption = sum(entry['wirkenergie_bezug_diff'] or 0 for entry in history) / len(history)
-        avg_production = sum(entry['wirkenergie_lieferung_diff'] or 0 for entry in history) / len(history)
-        print(f"Average consumption: {avg_consumption:.2f} W")
-        print(f"Average production: {avg_production:.2f} W")
+        if len(history) >= 2:
+            # Calculate total energy change over the period
+            total_consumption_change = latest['wirkenergie_bezug'] - earliest['wirkenergie_bezug']
+            total_production_change = latest['wirkenergie_lieferung'] - earliest['wirkenergie_lieferung']
+            
+            # Calculate time span
+            start_time = datetime.fromisoformat(earliest['timestamp'])
+            end_time = datetime.fromisoformat(latest['timestamp'])
+            time_span_hours = (end_time - start_time).total_seconds() / 3600
+            
+            if time_span_hours > 0:
+                avg_consumption_power = total_consumption_change / time_span_hours
+                avg_production_power = total_production_change / time_span_hours
+                print(f"Average consumption over period: {avg_consumption_power:.2f} W")
+                print(f"Average production over period: {avg_production_power:.2f} W")
+                print(f"Total consumption change: {total_consumption_change:.2f} Wh")
+                print(f"Total production change: {total_production_change:.2f} Wh")
 
 def main():
     if len(sys.argv) < 2:

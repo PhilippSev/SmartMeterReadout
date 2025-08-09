@@ -201,9 +201,10 @@ The SQLite database contains two main tables:
 - blindenergie_bezug/lieferung (reactive energy)
 - leistungsfaktor (power factor)
 
-**history**: Stores calculated differences over time
+**history**: Stores historical absolute readings over time
 - timestamp
-- wirkenergie_bezug_diff/wirkenergie_lieferung_diff (power differences in W)
+- wirkenergie_bezug/lieferung (total energy consumption/production in Wh)
+- wirkleistung_bezug/lieferung (instantaneous power consumption/production in W)
 
 ## Disk Usage
 The SQLite database is stored persistently in `/home/pi/smartmeter_data/` to preserve historical data across reboots.
