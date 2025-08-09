@@ -5,7 +5,7 @@ It was tested on a RaspberryPi Zero W with an MBus adapter.
 The received values are stored in a local SQLite database for efficient querying and data management.
 
 ## Detailed Description and required Hardware
-A detailed description of the project and the required hardware can be found on [my blog](https://projekte.philippseverin.at/2023/08/04/smartmeter-mit-raspberrypi-auslesen/).
+A detailed description of the project and the required hardware can be found on ~~my blog~~.
 
 ## Setup
 The setup uses **pypy** to execute the script for better performance.

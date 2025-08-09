@@ -121,6 +121,16 @@ def init_database():
         )
     ''')
     
+    # Create table to store last values for difference calculation
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS last_values (
+            id INTEGER PRIMARY KEY,
+            wirkenergie_bezug REAL,
+            wirkenergie_lieferung REAL,
+            timestamp DATETIME
+        )
+    ''')
+    
     # Create index on timestamp for better performance
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp)')
     
@@ -312,9 +322,11 @@ def updateHistory(json_current):
     cursor = conn.cursor()
     
     current_timestamp = json_current["Datum"]["value"]
+    wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
+    wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
     
     try:
-        # Get the last history entry to check time difference
+        # Get the last history entry to check time difference and get previous values
         cursor.execute('''
             SELECT timestamp, wirkenergie_bezug_diff, wirkenergie_lieferung_diff 
             FROM history 
@@ -323,37 +335,50 @@ def updateHistory(json_current):
         ''')
         last_entry = cursor.fetchone()
         
-        # Get the last wirkenergie values from current_readings history
+        # Get previous energy values from a special "last_values" table or create it
         cursor.execute('''
-            SELECT wirkenergie_bezug, wirkenergie_lieferung, timestamp
-            FROM current_readings 
-            ORDER BY timestamp DESC 
-            LIMIT 1 OFFSET 1
+            CREATE TABLE IF NOT EXISTS last_values (
+                id INTEGER PRIMARY KEY,
+                wirkenergie_bezug REAL,
+                wirkenergie_lieferung REAL,
+                timestamp DATETIME
+            )
         ''')
-        last_reading = cursor.fetchone()
         
-        if last_entry and last_reading:
-            last_timestamp = datetime.fromisoformat(last_entry[0])
+        cursor.execute('SELECT wirkenergie_bezug, wirkenergie_lieferung, timestamp FROM last_values LIMIT 1')
+        last_values = cursor.fetchone()
+        
+        wirkenergie_bezug_difference = 0
+        wirkenergie_lieferung_difference = 0
+        
+        if last_values:
+            # Check if enough time has passed since last history entry
+            if last_entry:
+                last_timestamp = datetime.fromisoformat(last_entry[0])
+                time_difference = current_timestamp - last_timestamp
+                
+                # Only update history every minute
+                if time_difference < timedelta(minutes=hostory_update_minutes):
+                    conn.close()
+                    return
+            
+            # Calculate time difference from last stored values
+            last_timestamp = datetime.fromisoformat(last_values[2])
             time_difference = current_timestamp - last_timestamp
             
-            # Only update history every minute
-            if time_difference < timedelta(minutes=hostory_update_minutes):
-                conn.close()
-                return
-            
-            # Get current and old values
-            wirkenergie_bezug_new = json_current["Wirkenergie A+"]["value"]
-            wirkenergie_lieferung_new = json_current["Wirkenergie A-"]["value"]
-            wirkenergie_bezug_old = last_reading[0]
-            wirkenergie_lieferung_old = last_reading[1]
-            
-            # Calculate watts from difference
-            time_difference_hours = time_difference.total_seconds() / 3600
-            wirkenergie_bezug_difference = (wirkenergie_bezug_new - wirkenergie_bezug_old) / time_difference_hours
-            wirkenergie_lieferung_difference = (wirkenergie_lieferung_new - wirkenergie_lieferung_old) / time_difference_hours
-        else:
-            wirkenergie_bezug_difference = 0
-            wirkenergie_lieferung_difference = 0
+            if time_difference.total_seconds() > 0:
+                # Get previous values
+                wirkenergie_bezug_old = last_values[0]
+                wirkenergie_lieferung_old = last_values[1]
+                
+                # Calculate energy difference in Wh
+                energy_bezug_diff = wirkenergie_bezug_new - wirkenergie_bezug_old
+                energy_lieferung_diff = wirkenergie_lieferung_new - wirkenergie_lieferung_old
+                
+                # Convert to average power in W over the time period
+                time_difference_hours = time_difference.total_seconds() / 3600
+                wirkenergie_bezug_difference = energy_bezug_diff / time_difference_hours
+                wirkenergie_lieferung_difference = energy_lieferung_diff / time_difference_hours
         
         # Insert new history entry
         cursor.execute('''
@@ -364,6 +389,13 @@ def updateHistory(json_current):
             round(wirkenergie_bezug_difference, 2),
             round(wirkenergie_lieferung_difference, 2)
         ))
+        
+        # Update last values for next calculation
+        cursor.execute('DELETE FROM last_values')
+        cursor.execute('''
+            INSERT INTO last_values (wirkenergie_bezug, wirkenergie_lieferung, timestamp)
+            VALUES (?, ?, ?)
+        ''', (wirkenergie_bezug_new, wirkenergie_lieferung_new, current_timestamp))
         
         # Remove old entries from history
         threshold_time = datetime.now() - timedelta(hours=history_keep_hours)
