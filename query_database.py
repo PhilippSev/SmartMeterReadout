@@ -52,76 +52,6 @@ def get_history(hours=24):
     
     return [dict(row) for row in results]
 
-def export_current_as_json():
-    """Export current reading in original JSON format"""
-    current = get_current_reading()
-    if not current:
-        return None
-    
-    json_current = {
-        "Datum": {"value": current["timestamp"]},
-        "Zaehlernummer": {"value": current["meter_number"]},
-        "Logical Device Name": {"value": current["logical_device_name"]},
-        "Wirkenergie A+": {"value": current["wirkenergie_bezug"], "unit": "Wh"},
-        "Wirkenergie A-": {"value": current["wirkenergie_lieferung"], "unit": "Wh"},
-        "Wirkleistung P+": {"value": current["wirkleistung_bezug"], "unit": "W"},
-        "Wirkleistung P-": {"value": current["wirkleistung_lieferung"], "unit": "W"},
-        "Blindenergie Q+": {"value": current["blindenergie_bezug"], "unit": "varh"},
-        "Blindenergie Q-": {"value": current["blindenergie_lieferung"], "unit": "varh"},
-        "Spannung L1": {"value": current["spannung_l1"], "unit": "V"},
-        "Spannung L2": {"value": current["spannung_l2"], "unit": "V"},
-        "Spannung L3": {"value": current["spannung_l3"], "unit": "V"},
-        "Strom L1": {"value": current["strom_l1"], "unit": "A"},
-        "Strom L2": {"value": current["strom_l2"], "unit": "A"},
-        "Strom L3": {"value": current["strom_l3"], "unit": "A"},
-        "Leistungsfaktor": {"value": current["leistungsfaktor"]}
-    }
-    
-    return json_current
-
-def export_history_as_json(hours=24):
-    """Export historical data in original JSON format"""
-    current = get_current_reading()
-    history_data = get_history(hours)
-    
-    if not current or len(history_data) < 2:
-        return None
-    
-    # Calculate differences for backwards compatibility
-    calculated_data = []
-    for i in range(1, len(history_data)):
-        prev_entry = history_data[i-1]
-        curr_entry = history_data[i]
-        
-        # Calculate time difference
-        prev_time = datetime.fromisoformat(prev_entry["timestamp"])
-        curr_time = datetime.fromisoformat(curr_entry["timestamp"])
-        time_diff_hours = (curr_time - prev_time).total_seconds() / 3600
-        
-        if time_diff_hours > 0:
-            # Calculate energy differences
-            energy_bezug_diff = curr_entry["wirkenergie_bezug"] - prev_entry["wirkenergie_bezug"]
-            energy_lieferung_diff = curr_entry["wirkenergie_lieferung"] - prev_entry["wirkenergie_lieferung"]
-            
-            # Convert to average power
-            power_bezug_diff = energy_bezug_diff / time_diff_hours
-            power_lieferung_diff = energy_lieferung_diff / time_diff_hours
-            
-            calculated_data.append({
-                "Datum": curr_entry["timestamp"],
-                "Wirkenergie Bezug Diff": round(power_bezug_diff, 2),
-                "Wirkenergie Lieferung Diff": round(power_lieferung_diff, 2)
-            })
-    
-    json_history = {
-        "Wirkenergie A+ last": current["wirkenergie_bezug"],
-        "Wirkenergie A- last": current["wirkenergie_lieferung"], 
-        "Datum": current["timestamp"],
-        "data": calculated_data
-    }
-    
-    return json_history
-
 def print_current_summary():
     """Print a summary of current readings"""
     current = get_current_reading()
@@ -181,8 +111,6 @@ def main():
         print("Commands:")
         print("  current         - Show current reading summary")
         print("  history [hours] - Show history summary (default: 24 hours)")
-        print("  export-current  - Export current reading as JSON")
-        print("  export-history [hours] - Export history as JSON (default: 24 hours)")
         print("  raw-current     - Show raw current data")
         print("  raw-history [hours] - Show raw history data (default: 24 hours)")
         return
@@ -195,21 +123,6 @@ def main():
     elif command == "history":
         hours = int(sys.argv[2]) if len(sys.argv) > 2 else 24
         print_history_summary(hours)
-    
-    elif command == "export-current":
-        data = export_current_as_json()
-        if data:
-            print(json.dumps(data, indent=2, default=str))
-        else:
-            print("No current data found")
-    
-    elif command == "export-history":
-        hours = int(sys.argv[2]) if len(sys.argv) > 2 else 24
-        data = export_history_as_json(hours)
-        if data:
-            print(json.dumps(data, indent=2, default=str))
-        else:
-            print("No history data found")
     
     elif command == "raw-current":
         data = get_current_reading()

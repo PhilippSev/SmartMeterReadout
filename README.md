@@ -181,11 +181,11 @@ python3 query_database.py history
 # Show history for last 48 hours  
 python3 query_database.py history 48
 
-# Export current reading as JSON
-python3 query_database.py export-current
+# Show raw current data
+python3 query_database.py raw-current
 
-# Export history as JSON
-python3 query_database.py export-history 24
+# Show raw history data
+python3 query_database.py raw-history 24
 ```
 
 ### Database Schema
