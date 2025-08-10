@@ -24,8 +24,11 @@ import sqlite3
 
 history_keep_hours = 24
 hostory_update_minutes = 1
-directory = "/home/pi/smartmeter_data"
-database_file = "/home/pi/smartmeter_data/smartmeter.db"
+backup_interval_minutes = 5
+tmpfs_directory = "/ram"
+persistent_directory = "/home/pi/smartmeter_data"
+database_file = "/ram/smartmeter.db"
+backup_database_file = "/home/pi/smartmeter_data/smartmeter.db"
 serial_packet_bytes = 376
 
 #######################################
@@ -79,8 +82,11 @@ ser = serial.Serial("/dev/ttyS0",
                     stopbits=serial.STOPBITS_ONE, 
                     bytesize=serial.EIGHTBITS)
 
-if not os.path.exists(directory):
-    os.mkdir(directory, 0o777)
+# Ensure directories exist
+if not os.path.exists(tmpfs_directory):
+    os.mkdir(tmpfs_directory, 0o777)
+if not os.path.exists(persistent_directory):
+    os.mkdir(persistent_directory, 0o777)
 
 # Initialize database
 def init_database():
@@ -131,6 +137,32 @@ def init_database():
     conn.close()
 
 init_database()
+
+# Database backup functions
+def backup_database():
+    """Copy database from tmpfs to persistent storage"""
+    try:
+        if os.path.exists(database_file):
+            import shutil
+            shutil.copy2(database_file, backup_database_file)
+            print(f"Database backed up to {backup_database_file}")
+    except Exception as e:
+        print(f"Error backing up database: {e}")
+
+def restore_database():
+    """Restore database from persistent storage to tmpfs"""
+    try:
+        if os.path.exists(backup_database_file):
+            import shutil
+            shutil.copy2(backup_database_file, database_file)
+            print(f"Database restored from {backup_database_file}")
+        else:
+            print("No backup database found, starting fresh")
+    except Exception as e:
+        print(f"Error restoring database: {e}")
+
+# Restore database on startup
+restore_database()
 
 #######################################
 # Functions
@@ -396,6 +428,9 @@ def getHistory(hours=24):
 key = readKey()
 synchronizeSerial()
 
+# Track last backup time
+last_backup_time = datetime.now()
+
 while True:
     #print("Reading data...")
     data = readPacket()
@@ -403,3 +438,9 @@ while True:
     json_current = getJsonCurrent(plaintext)
     updateCurrentReading(json_current)
     updateHistory(json_current)
+    
+    # Check if it's time to backup the database
+    current_time = datetime.now()
+    if (current_time - last_backup_time).total_seconds() >= backup_interval_minutes * 60:
+        backup_database()
+        last_backup_time = current_time

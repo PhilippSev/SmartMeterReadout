@@ -4,9 +4,13 @@
 mkdir -p /home/pi/readout
 chown pi:pi /home/pi/readout
 
-# Ensure the data directory exists and has correct permissions  
+# Ensure the persistent data directory exists and has correct permissions  
 mkdir -p /home/pi/smartmeter_data
 chown pi:pi /home/pi/smartmeter_data
+
+# Ensure tmpfs directory exists and has correct permissions
+mkdir -p /ram
+chmod a+rw /ram
 
 # Copy service file and reload systemd
 cp smartmeterreadout.service /lib/systemd/system

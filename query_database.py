@@ -8,7 +8,7 @@ import json
 import sys
 from datetime import datetime, timedelta
 
-def connect_database(database_file="/home/pi/smartmeter_data/smartmeter.db"):
+def connect_database(database_file="/ram/smartmeter.db"):
     """Connect to the database and return connection"""
     try:
         conn = sqlite3.connect(database_file)

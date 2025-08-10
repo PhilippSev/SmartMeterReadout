@@ -28,6 +28,22 @@ sudo apt install pypy3-pip
 sudo apt install git
 ```
 
+### Setup tmpfs for reduced SD card wear
+
+To minimize SD card wear, the database runs in RAM with periodic backups to persistent storage:
+
+```bash
+# Create the tmpfs directory
+sudo mkdir /ram
+sudo chmod a+rw /ram
+
+# Edit /etc/fstab to add tmpfs mount
+echo "tmpfs    /ram    tmpfs    defaults,noatime,nosuid,nodev,noexec,mode=1777,size=8M  0  0" | sudo tee -a /etc/fstab
+
+# Reboot to activate tmpfs
+sudo reboot now
+```
+
 ### Installation
 
 1. **Clone the repository**:
@@ -206,4 +222,11 @@ The SQLite database contains two main tables:
 - wirkenergie_bezug/lieferung (total energy consumption/production in Wh)
 
 ## Disk Usage
-The SQLite database is stored persistently in `/home/pi/smartmeter_data/` to preserve historical data across reboots.
+The SQLite database runs in tmpfs (`/ram/`) to minimize SD card wear, with automatic backups to persistent storage (`/home/pi/smartmeter_data/`) every 5 minutes. This approach provides:
+
+- **Reduced SD card wear**: Database operations happen in RAM
+- **Data persistence**: Regular backups ensure data is not lost
+- **Performance**: RAM-based database operations are faster
+- **Reliability**: System can recover from unexpected reboots using the latest backup
+
+The tmpfs is limited to 8MB, which is sufficient for the database size and prevents excessive RAM usage.
